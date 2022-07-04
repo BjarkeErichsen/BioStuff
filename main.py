@@ -1,7 +1,8 @@
 
-
+import sys
 import torch
 import numpy as np
-print("hello")
-print("hello again")
 
+for path in sys.path:
+    print(path)
+print(torch.cuda.is_available())
