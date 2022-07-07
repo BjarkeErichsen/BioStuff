@@ -1,12 +1,18 @@
 
-import sys
 import torch
-import extraModule
-import numpy as np
-from PIL import Image
-import torchvision.transforms as transforms
-import os
+from torch.nn import Conv2d
+from torch.nn import Linear
+from torch.nn import MaxPool2d
+from torch.nn import ReLU
+from torch.nn import LogSoftmax
+from torch import flatten
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import createDataset
+from torch.utils.data import Dataset, DataLoader
 """
+import sys
 for path in sys.path:
     print(path)
 #print(torch.cuda.is_available())
@@ -15,59 +21,80 @@ for path in sys.path:
 print(Data)
 """
 
-directoryCatsTrain = r"C:\Users\EXG\OneDrive - Danmarks Tekniske Universitet\Skrivebord\BioProgrammering\Data\training_set\training_set\cats"
-directoryDogsTrain = r"C:\Users\EXG\OneDrive - Danmarks Tekniske Universitet\Skrivebord\BioProgrammering\Data\training_set\training_set\dogs"
-directoryCatsTest = r"C:\Users\EXG\OneDrive - Danmarks Tekniske Universitet\Skrivebord\BioProgrammering\Data\test_set\test_set\cats"
-directoryDogsTest = r"C:\Users\EXG\OneDrive - Danmarks Tekniske Universitet\Skrivebord\BioProgrammering\Data\test_set\test_set\dogs"
+trainCats, trainDogs, testCats, testDogs = createDataset.create_datasets()
+batch_size = 20
+epochs = 4
 
-trainDogsList, trainCatsList, testDogsList, testCatsList = [], [], [], []
-size = 128, 128
+class ConvNet(nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 6, 3)
+        self.conv2 = nn.Conv2d(6, 6, 3)
 
-for Directory in [directoryCatsTrain, directoryDogsTrain, directoryCatsTest, directoryDogsTest]:
-    for filename in os.listdir(Directory):
-        f = os.path.join(Directory, filename)
-        # checking if it is a file
-        if os.path.isfile(f) and f[-3:] == 'jpg':
+        #self.conv3 = nn.Conv2d(200, 400, 2)
+        #self.conv4 = nn.Conv2d(400, 400, 2)
 
-            if "training_set\cats" in Directory:
-                image = Image.open(f)  #if image.size != (512, 512):
-                image = image.resize(size)
+        self.pool = nn.MaxPool2d(2)
 
-                transform = transforms.Compose([transforms.PILToTensor()])
-                transform = transforms.PILToTensor()
-                img_tensor = transform(image)
-                trainCatsList.append(img_tensor)
+        self.fc1 = nn.Linear(10800, 1000)
+        self.fc2 = nn.Linear(1000, 20)
+        self.drop1 = nn.Dropout(p=0.2)
+        self.drop2 = nn.Dropout(p=0.5)
 
-            elif "training_set\dogs" in Directory:
-                image = Image.open(f) #f = location of image
-                image = image.resize(size) #size = tuple of desired size the image sh
-                transform = transforms.Compose([transforms.PILToTensor()])
-                transform = transforms.PILToTensor()
-                img_tensor = transform(image)  #gets tensor
-                trainDogsList.append(img_tensor)
+    def forward(self, x, training=True):
 
+        x = F.relu(self.conv1(x))
+        x = self.pool(F.relu(self.conv2(x)))
 
-            elif "test_set\cats" in Directory:
-                image = Image.open(f)
-                image = image.resize(size)
-                transform = transforms.Compose([transforms.PILToTensor()])
-                transform = transforms.PILToTensor()
-                img_tensor = transform(image)
-                testDogsList.append(img_tensor)
+        #x = F.relu(self.conv3(x))
+        #x = self.pool(F.relu(self.conv4(x)))
 
-            elif "test_set\dogs" in Directory:
-                image = Image.open(f)
-                image = image.resize(size)
-                transform = transforms.Compose([transforms.PILToTensor()])
-                transform = transforms.PILToTensor()
-                img_tensor = transform(image)
-                testCatsList.append(img_tensor)
+        x = x.view(x.size(0), -1)
+        if training:
+            x = self.drop1(x)
+        x = F.relu(self.fc1(x))
+        if training:
+            x = self.drop2(x)
+        x = F.relu(self.fc2(x))
 
-trainCats = torch.stack(trainCatsList)    #(image, channels, height, width)
-trainDogs = torch.stack(trainDogsList)
-testDogs = torch.stack(testDogsList)
-testCats = torch.stack(testCatsList)
+        x = F.softmax(x, dim=1)  # 20 dim output
+        return x
+
+class theDataset(Dataset):
+    def __init__(self):
+        self.x = torch.cat((trainCats, trainDogs))
+        self.y = [torch.tensor([1], dtype=torch.float64) if i<len(trainCats[0]) else torch.tensor([0], dtype=torch.float64) for i in range(self.x.shape[0])] #cats = 1, dogs = 0
+    def __getitem__(self, index):
+        return self.x[index], self.y[index]
+    def __len__(self):
+        return len(self.x.shape[0])
 
 
 
-trainDogs.shape()
+def train_nn(dataset_train, lr=1e-4, epochs=4, batch_size=20, device = "cpu"):
+    criterion = nn.CrossEntropyLoss()
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #training with either cpu or cuda
+    # model = model.to(device=device) #to send the model for training on either cuda or cpu
+
+    model = ConvNet()
+    model = model.to(device=device)  # to send the model for training on either cuda or cpu
+
+    for epoch in range(epochs):  # epoch -> GPU training time for 1 epoch is 12 min
+
+        optimizer = optim.RMSprop(model.parameters(), lr=lr)
+        train = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+
+        for i, data in enumerate(train, 0):
+            inputs, labels = data
+
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+
+    return model
+dataset = theDataset()
+train = torch.utils.data.DataLoader(theDataset, batch_size=batch_size, shuffle=True)
+
+train = torch.utils.data.DataLoader(theDataset, batch_size=batch_size, shuffle=True)
