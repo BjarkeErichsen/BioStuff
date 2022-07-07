@@ -67,7 +67,7 @@ class theDataset(Dataset):
     def __getitem__(self, index):
         return self.x[index], self.y[index]
     def __len__(self):
-        return len(self.x.shape[0])
+        return self.x.shape[0]
 
 
 
@@ -95,6 +95,15 @@ def train_nn(dataset_train, lr=1e-4, epochs=4, batch_size=20, device = "cpu"):
 
     return model
 dataset = theDataset()
-train = torch.utils.data.DataLoader(theDataset, batch_size=batch_size, shuffle=True)
 
-train = torch.utils.data.DataLoader(theDataset, batch_size=batch_size, shuffle=True)
+model = train_nn(dataset)
+
+
+def testing():
+    for i in
+        testCats, testDogs
+
+
+
+
+print("hhah")
