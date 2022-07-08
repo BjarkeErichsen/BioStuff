@@ -58,4 +58,4 @@ def create_datasets(size = (128, 128)):
     trainDogs = torch.stack(trainDogsList)
     testDogs = torch.stack(testDogsList)
     testCats = torch.stack(testCatsList)
-    return trainCats.type(torch.DoubleTensor), trainDogs.type(torch.DoubleTensor), testCats.type(torch.DoubleTensor), testDogs.type(torch.DoubleTensor)
+    return trainCats.type(torch.float32), trainDogs.type(torch.float32), testCats.type(torch.float32), testDogs.type(torch.float32)
