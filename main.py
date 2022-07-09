@@ -23,7 +23,7 @@ print(Data)
 
 trainCats, trainDogs, testCats, testDogs = createDataset.create_datasets()
 batch_size = 20
-epochs = 4
+epochs = 30
 
 class ConvNet(nn.Module):
     def __init__(self):
@@ -41,7 +41,7 @@ class ConvNet(nn.Module):
         self.drop1 = nn.Dropout(p=0.1)
         self.drop2 = nn.Dropout(p=0.1)
 
-    def forward(self, x, training=True):
+    def forward(self, x, training=False):
 
         x = F.relu(self.conv1(x))
         x = self.pool(F.relu(self.conv2(x)))
@@ -57,13 +57,15 @@ class ConvNet(nn.Module):
             x = self.drop2(x)
         x = self.fc2(x)
 
-        x = F.softmax(x, dim=0)
+        x = F.softmax(x, dim=1)
         return x
 
 class theDataset(Dataset):
     def __init__(self):
         self.x = torch.cat((trainCats, trainDogs))
+        #self.x = trainCats
         self.y = [torch.tensor([1,0], dtype=torch.float32) if i<trainCats.shape[0] else torch.tensor([0,1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = [1,0], dogs = [0,1]
+        #self.y = [torch.tensor([1, 0], dtype=torch.float32) for i in range(self.x.shape[0])]
     def __getitem__(self, index):
         return self.x[index], self.y[index]
     def __len__(self):
@@ -80,7 +82,7 @@ class theTestDataset(Dataset):
 
 
 
-def train_nn(dataset_train,dataset_test, lr=1e-3, epochs=4, batch_size=20, device = "cpu"):
+def train_nn(dataset_train,dataset_test, lr=1e-5, epochs=4, batch_size=20, device = "cpu"):
     criterion = nn.CrossEntropyLoss()
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #training with either cpu or cuda
     # model = model.to(device=device) #to send the model for training on either cuda or cpu
@@ -99,8 +101,9 @@ def train_nn(dataset_train,dataset_test, lr=1e-3, epochs=4, batch_size=20, devic
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
-            #if i%100:
-                #print(outputs, labels)
+            if i==0:
+                print(int(torch.count_nonzero(torch.round(outputs)==labels).item()/2))
+
             loss.backward()
             optimizer.step()
         correct, count = testing(dataset_test, model)
