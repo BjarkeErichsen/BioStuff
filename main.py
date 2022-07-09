@@ -23,7 +23,7 @@ print(Data)
 
 trainCats, trainDogs, testCats, testDogs = createDataset.create_datasets()
 batch_size = 20
-epochs = 1
+epochs = 4
 
 class ConvNet(nn.Module):
     def __init__(self):
@@ -55,9 +55,9 @@ class ConvNet(nn.Module):
         x = F.relu(self.fc1(x))
         if training:
             x = self.drop2(x)
-        x = F.relu(self.fc2(x))
+        x = self.fc2(x)
 
-        x = F.softmax(x)
+        x = F.softmax(x, dim=0)
         return x
 
 class theDataset(Dataset):
@@ -69,16 +69,25 @@ class theDataset(Dataset):
     def __len__(self):
         return self.x.shape[0]
 
+class theTestDataset(Dataset):
+    def __init__(self):
+        self.x = torch.cat((testCats, testDogs))
+        self.y = [torch.tensor([0], dtype=torch.float32) if i<testCats.shape[0] else torch.tensor([1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = [1,0], dogs = [0,1]
+    def __getitem__(self, index):
+        return self.x[index], self.y[index]
+    def __len__(self):
+        return self.x.shape[0]
 
 
-def train_nn(dataset_train, lr=1e-3, epochs=4, batch_size=20, device = "cpu"):
+
+def train_nn(dataset_train,dataset_test, lr=1e-3, epochs=4, batch_size=20, device = "cpu"):
     criterion = nn.CrossEntropyLoss()
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #training with either cpu or cuda
     # model = model.to(device=device) #to send the model for training on either cuda or cpu
 
     model = ConvNet()
     model = model.to(device=device)  # to send the model for training on either cuda or cpu
-    optimizer = optim.RMSprop(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     for epoch in range(epochs):  # epoch -> GPU training time for 1 epoch is 12 min
 
@@ -90,25 +99,13 @@ def train_nn(dataset_train, lr=1e-3, epochs=4, batch_size=20, device = "cpu"):
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
-            if i%100:
-                print(outputs, labels)
+            #if i%100:
+                #print(outputs, labels)
             loss.backward()
             optimizer.step()
-
+        correct, count = testing(dataset_test, model)
+        print("correct ", correct, "count ",count)
     return model
-dataset = theDataset()
-model = train_nn(dataset, epochs=epochs)
-
-
-
-class theTestDataset(Dataset):
-    def __init__(self):
-        self.x = torch.cat((testCats, testDogs))
-        self.y = [torch.tensor([0], dtype=torch.float32) if i<testCats.shape[0] else torch.tensor([1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = [1,0], dogs = [0,1]
-    def __getitem__(self, index):
-        return self.x[index], self.y[index]
-    def __len__(self):
-        return self.x.shape[0]
 
 def testing(dataset, model):
 
@@ -122,16 +119,17 @@ def testing(dataset, model):
 
             outputs = model(inputs, training=False)
 
-            predictions = torch.argmax(outputs, 1) #0 is cat, 1 is dog
+            predictions = torch.argmax(outputs) #0 is cat, 1 is dog
             if predictions.item()-labels.item() == 0:
                 correct += 1
-            print(predictions.item(),labels.item())
+
             count+=1
     return correct, count
-dataset = theTestDataset()
-correct, count = testing(dataset, model)
+testdataset = theTestDataset()
+traindataset = theDataset()
+model = train_nn(traindataset,testdataset, epochs=epochs)
 
-print(correct, count)
 
+print("hello")
 
 
