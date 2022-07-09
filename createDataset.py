@@ -1,3 +1,4 @@
+from matplotlib import pyplot as plt
 
 import sys
 import torch
@@ -58,4 +59,12 @@ def create_datasets(size = (128, 128)):
     trainDogs = torch.stack(trainDogsList)
     testDogs = torch.stack(testDogsList)
     testCats = torch.stack(testCatsList)
+
+
+    helper = testCatsList[0].numpy()
+    helper = np.reshape(helper, (128,128,3))  # you can give axis attribute if you wanna squeeze in specific dimension
+    plt.imshow(helper)
+    plt.show()
+
+
     return trainCats.type(torch.float32), trainDogs.type(torch.float32), testCats.type(torch.float32), testDogs.type(torch.float32)
