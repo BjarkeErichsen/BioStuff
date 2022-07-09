@@ -57,7 +57,7 @@ class ConvNet(nn.Module):
             x = self.drop2(x)
         x = self.fc2(x)
 
-        x = F.softmax(x, dim=1)
+        #x = F.softmax(x, dim=1)
         return x
 
 class theDataset(Dataset):
@@ -74,7 +74,7 @@ class theDataset(Dataset):
 class theTestDataset(Dataset):
     def __init__(self):
         self.x = torch.cat((testCats, testDogs))
-        self.y = [torch.tensor([0], dtype=torch.float32) if i<testCats.shape[0] else torch.tensor([1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = [1,0], dogs = [0,1]
+        self.y = [torch.tensor([0], dtype=torch.float32) if i<testCats.shape[0] else torch.tensor([1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = 0, dogs = 1
     def __getitem__(self, index):
         return self.x[index], self.y[index]
     def __len__(self):
@@ -82,7 +82,7 @@ class theTestDataset(Dataset):
 
 
 
-def train_nn(dataset_train,dataset_test, lr=1e-5, epochs=4, batch_size=20, device = "cpu"):
+def train_nn(dataset_train,dataset_test, lr=1e-4, epochs=4, batch_size=20, device = "cpu"):
     criterion = nn.CrossEntropyLoss()
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #training with either cpu or cuda
     # model = model.to(device=device) #to send the model for training on either cuda or cpu
@@ -102,12 +102,14 @@ def train_nn(dataset_train,dataset_test, lr=1e-5, epochs=4, batch_size=20, devic
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             if i==0:
-                print(int(torch.count_nonzero(torch.round(outputs)==labels).item()/2))
+                print(int(torch.count_nonzero(torch.round(F.softmax(outputs))==labels).item()/2))
 
             loss.backward()
             optimizer.step()
+        model.eval()  # turning on eval mode
         correct, count = testing(dataset_test, model)
         print("correct ", correct, "count ",count)
+        model.train() #turning back training mode
     return model
 
 def testing(dataset, model):
@@ -122,7 +124,7 @@ def testing(dataset, model):
 
             outputs = model(inputs, training=False)
 
-            predictions = torch.argmax(outputs) #0 is cat, 1 is dog
+            predictions = torch.argmax(F.softmax(outputs)) #0 is cat, 1 is dog
             if predictions.item()-labels.item() == 0:
                 correct += 1
 
