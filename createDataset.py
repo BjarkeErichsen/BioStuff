@@ -46,7 +46,7 @@ def create_datasets(size = (128, 128)):
                     transform = transforms.Compose([transforms.PILToTensor()])
                     transform = transforms.PILToTensor()
                     img_tensor = transform(image)
-                    testDogsList.append(img_tensor)
+                    testCatsList.append(img_tensor)
 
                 elif "test_set\dogs" in Directory:
                     image = Image.open(f)
@@ -54,7 +54,7 @@ def create_datasets(size = (128, 128)):
                     transform = transforms.Compose([transforms.PILToTensor()])
                     transform = transforms.PILToTensor()
                     img_tensor = transform(image)
-                    testCatsList.append(img_tensor)
+                    testDogsList.append(img_tensor)
 
     trainCats = torch.stack(trainCatsList)    #(image, channels, height, width)
     trainDogs = torch.stack(trainDogsList)

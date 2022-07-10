@@ -11,6 +11,47 @@ import torch.nn.functional as F
 import torch.optim as optim
 import createDataset
 from torch.utils.data import Dataset, DataLoader
+import wandb
+import tqdm
+wandb.login()
+torch.manual_seed_all(hash(2**32))
+
+config = dict(epochs=5, batch_size=20)
+
+lr = 0.001
+
+def model_pipeline(hyperparameters):
+
+    #tell wandb to get started
+    with wandb.init(project = "pytorch-demo", config = hyperparameters):
+        config = wandb.config
+
+        #make the model and optimization problem
+
+        model, train_loader, test_loader, criterion, optimizer = make(config)
+
+        train(model, train_loader, criterion, optimizer, config)
+
+        correct, count = test(model, test_loader)
+        model.train()  # turning back training mode
+        print("correct ", correct, "count ",count)
+
+    return model
+
+def make(config):
+    trainCats, trainDogs, testCats, testDogs = createDataset.create_datasets()
+    traindataset = theDataset(trainCats, trainDogs)
+    testdataset = theTestDataset(testCats, testDogs)
+
+    train_loader = train = torch.utils.data.DataLoader(traindataset, batch_size=config.batch_size, shuffle=True)
+    test_loader =  test = torch.utils.data.DataLoader(testdataset, batch_size=1, shuffle=True)
+
+    criterion = nn.CrossEntropyLoss()
+    model = ConvNet()
+    model = model.to(device="cpu")  # to send the model for training on either cuda or cpu
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    return model, train_loader, test_loader, criterion, optimizer
 """
 import sys
 for path in sys.path:
@@ -20,10 +61,6 @@ for path in sys.path:
 
 print(Data)
 """
-
-trainCats, trainDogs, testCats, testDogs = createDataset.create_datasets()
-batch_size = 20
-epochs = 30
 
 class ConvNet(nn.Module):
     def __init__(self):
@@ -59,9 +96,8 @@ class ConvNet(nn.Module):
 
         #x = F.softmax(x, dim=1)
         return x
-
 class theDataset(Dataset):
-    def __init__(self):
+    def __init__(self,trainCats, trainDogs):
         self.x = torch.cat((trainCats, trainDogs))
         #self.x = trainCats
         self.y = [torch.tensor([1,0], dtype=torch.float32) if i<trainCats.shape[0] else torch.tensor([0,1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = [1,0], dogs = [0,1]
@@ -70,9 +106,8 @@ class theDataset(Dataset):
         return self.x[index], self.y[index]
     def __len__(self):
         return self.x.shape[0]
-
 class theTestDataset(Dataset):
-    def __init__(self):
+    def __init__(self, testCats, testDogs):
         self.x = torch.cat((testCats, testDogs))
         self.y = [torch.tensor([0], dtype=torch.float32) if i<testCats.shape[0] else torch.tensor([1], dtype=torch.float32) for i in range(self.x.shape[0])] #cats = 0, dogs = 1
     def __getitem__(self, index):
@@ -80,61 +115,57 @@ class theTestDataset(Dataset):
     def __len__(self):
         return self.x.shape[0]
 
+def train(model, train_loader, criterion, optimizer, config, lr=1e-4):
+    helper = 0
 
+    wandb.watch(model, criterion, log="all", log_freq=10)
 
-def train_nn(dataset_train,dataset_test, lr=1e-4, epochs=4, batch_size=20, device = "cpu"):
-    criterion = nn.CrossEntropyLoss()
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') #training with either cpu or cuda
-    # model = model.to(device=device) #to send the model for training on either cuda or cpu
-
-    model = ConvNet()
-    model = model.to(device=device)  # to send the model for training on either cuda or cpu
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    for epoch in range(epochs):  # epoch -> GPU training time for 1 epoch is 12 min
-
-        train = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
-
-        for i, data in enumerate(train, 0):
+    for epoch in tqdm(range(config.epochs)):  # epoch -> GPU training time for 1 epoch is 12 min
+        for i, data in enumerate(train_loader, 0):
             inputs, labels = data
 
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
-            if i==0:
-                print(int(torch.count_nonzero(torch.round(F.softmax(outputs))==labels).item()/2))
+            #if i==0:
+                #print(int(torch.count_nonzero(torch.round(F.softmax(outputs, dim=1))==labels).item()/2))
 
             loss.backward()
             optimizer.step()
-        model.eval()  # turning on eval mode
-        correct, count = testing(dataset_test, model)
-        print("correct ", correct, "count ",count)
-        model.train() #turning back training mode
+
+            helper +=1
+            if helper%100 == 0:
+                train_log(loss, epoch)
+
     return model
-
-def testing(dataset, model):
-
-    test = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
-
+def test(model,test_loader):
+    model.eval()
     with torch.no_grad():
         correct = 0
         count = 0
-        for i, data in enumerate(test):
+        for i, data in enumerate(test_loader):
             inputs, labels = data
 
             outputs = model(inputs, training=False)
 
-            predictions = torch.argmax(F.softmax(outputs)) #0 is cat, 1 is dog
+            predictions = torch.argmax(F.softmax(outputs,dim=1)) #0 is cat, 1 is dog
             if predictions.item()-labels.item() == 0:
                 correct += 1
 
             count+=1
+        wandb.log({"correct": correct, "total":count})
+
+        #maybe save the file using torch.onnx.export(model, images, "model.onnx) wandb.save(mode.onnx)
     return correct, count
-testdataset = theTestDataset()
-traindataset = theDataset()
-model = train_nn(traindataset,testdataset, epochs=epochs)
+
+def train_log(loss,epoch):
+
+    loss = float(loss)
+    wandb.log({"epoch": epoch, "loss":loss})
+
+    print("loss is ", loss)
 
 
-print("hello")
 
+model_pipeline(config)
 
