@@ -12,9 +12,9 @@ import torch.optim as optim
 import createDataset
 from torch.utils.data import Dataset, DataLoader
 import wandb
-import tqdm
+from tqdm.notebook import tqdm
 wandb.login()
-torch.manual_seed_all(hash(2**32))
+torch.manual_seed(69)
 
 config = dict(epochs=5, batch_size=20)
 
@@ -43,7 +43,7 @@ def make(config):
     traindataset = theDataset(trainCats, trainDogs)
     testdataset = theTestDataset(testCats, testDogs)
 
-    train_loader = train = torch.utils.data.DataLoader(traindataset, batch_size=config.batch_size, shuffle=True)
+    train_loader = train = torch.utils.data.DataLoader(traindataset, batch_size=config["batch_size"], shuffle=True)
     test_loader =  test = torch.utils.data.DataLoader(testdataset, batch_size=1, shuffle=True)
 
     criterion = nn.CrossEntropyLoss()
@@ -120,7 +120,7 @@ def train(model, train_loader, criterion, optimizer, config, lr=1e-4):
 
     wandb.watch(model, criterion, log="all", log_freq=10)
 
-    for epoch in tqdm(range(config.epochs)):  # epoch -> GPU training time for 1 epoch is 12 min
+    for epoch in range(config["epochs"]):  #use tqdm
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
 
