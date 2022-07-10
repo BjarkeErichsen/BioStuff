@@ -23,18 +23,16 @@ lr = 0.001
 def model_pipeline(hyperparameters):
 
     #tell wandb to get started
-    with wandb.init(project = "pytorch-demo", config = hyperparameters):
+    with wandb.init(project = "CatsAndDogs", config = hyperparameters):
         config = wandb.config
 
         #make the model and optimization problem
 
         model, train_loader, test_loader, criterion, optimizer = make(config)
 
-        train(model, train_loader, criterion, optimizer, config)
+        train(model, train_loader, test_loader, criterion, optimizer, config)
 
-        correct, count = test(model, test_loader)
-        model.train()  # turning back training mode
-        print("correct ", correct, "count ",count)
+        #correct, count = test(model, test_loader)
 
     return model
 
@@ -115,7 +113,7 @@ class theTestDataset(Dataset):
     def __len__(self):
         return self.x.shape[0]
 
-def train(model, train_loader, criterion, optimizer, config, lr=1e-4):
+def train(model, train_loader,test_loader, criterion, optimizer, config, lr=1e-4):
     helper = 0
 
     wandb.watch(model, criterion, log="all", log_freq=10)
@@ -136,6 +134,7 @@ def train(model, train_loader, criterion, optimizer, config, lr=1e-4):
             helper +=1
             if helper%100 == 0:
                 train_log(loss, epoch)
+        test(model,test_loader)
 
     return model
 def test(model,test_loader):
@@ -156,6 +155,7 @@ def test(model,test_loader):
         wandb.log({"correct": correct, "total":count})
 
         #maybe save the file using torch.onnx.export(model, images, "model.onnx) wandb.save(mode.onnx)
+    model.train()
     return correct, count
 
 def train_log(loss,epoch):
