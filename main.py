@@ -16,23 +16,27 @@ from tqdm.notebook import tqdm
 wandb.login()
 torch.manual_seed(69)
 
-config = dict(epochs=5, batch_size=20)
+config = dict(epochs=30, batch_size=64)
 
 lr = 0.001
+
+
 
 def model_pipeline(hyperparameters):
 
     #tell wandb to get started
-    with wandb.init(project = "CatsAndDogs", config = hyperparameters):
+    with wandb.init(project = "CatsAndDogs", config = hyperparameters, name="30 epochs 64 batchsize"):
         config = wandb.config
 
         #make the model and optimization problem
 
         model, train_loader, test_loader, criterion, optimizer = make(config)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        model.to(device)
 
-        train(model, train_loader, test_loader, criterion, optimizer, config)
+        train(model, train_loader, test_loader, criterion, optimizer, config, device)
 
-        #correct, count = test(model, test_loader)
+        #correct, count = test(model, test_loader, device)
 
     return model
 
@@ -46,7 +50,7 @@ def make(config):
 
     criterion = nn.CrossEntropyLoss()
     model = ConvNet()
-    model = model.to(device="cpu")  # to send the model for training on either cuda or cpu
+    model = model  # to send the model for training on either cuda or cpu
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     return model, train_loader, test_loader, criterion, optimizer
@@ -76,7 +80,7 @@ class ConvNet(nn.Module):
         self.drop1 = nn.Dropout(p=0.1)
         self.drop2 = nn.Dropout(p=0.1)
 
-    def forward(self, x, training=False):
+    def forward(self, x):
 
         x = F.relu(self.conv1(x))
         x = self.pool(F.relu(self.conv2(x)))
@@ -85,11 +89,9 @@ class ConvNet(nn.Module):
         #x = self.pool(F.relu(self.conv4(x)))
 
         x = x.view(x.size(0), -1)
-        if training:
-            x = self.drop1(x)
+        x = self.drop1(x)
         x = F.relu(self.fc1(x))
-        if training:
-            x = self.drop2(x)
+        x = self.drop2(x)
         x = self.fc2(x)
 
         #x = F.softmax(x, dim=1)
@@ -113,7 +115,7 @@ class theTestDataset(Dataset):
     def __len__(self):
         return self.x.shape[0]
 
-def train(model, train_loader,test_loader, criterion, optimizer, config, lr=1e-4):
+def train(model, train_loader,test_loader, criterion, optimizer, config, device, lr=1e-4):
     helper = 0
 
     wandb.watch(model, criterion, log="all", log_freq=10)
@@ -121,6 +123,7 @@ def train(model, train_loader,test_loader, criterion, optimizer, config, lr=1e-4
     for epoch in range(config["epochs"]):  #use tqdm
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -134,25 +137,26 @@ def train(model, train_loader,test_loader, criterion, optimizer, config, lr=1e-4
             helper +=1
             if helper%100 == 0:
                 train_log(loss, epoch)
-        test(model,test_loader)
+        test(model,test_loader, device)
 
     return model
-def test(model,test_loader):
+def test(model,test_loader, device):
     model.eval()
     with torch.no_grad():
         correct = 0
         count = 0
         for i, data in enumerate(test_loader):
             inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
 
-            outputs = model(inputs, training=False)
+            outputs = model(inputs)
 
             predictions = torch.argmax(F.softmax(outputs,dim=1)) #0 is cat, 1 is dog
             if predictions.item()-labels.item() == 0:
                 correct += 1
 
             count+=1
-        wandb.log({"correct": correct, "total":count})
+        wandb.log({"correct": correct, "percentage correct":correct/count})
 
         #maybe save the file using torch.onnx.export(model, images, "model.onnx) wandb.save(mode.onnx)
     model.train()
