@@ -1,4 +1,4 @@
-
+import pprint #endel af basic python
 import torch
 from torch.nn import Conv2d
 from torch.nn import Linear
@@ -20,6 +20,29 @@ config = dict(epochs=30, batch_size=64)
 
 lr = 0.001
 
+sweep_config = {
+    'method': 'random'
+    }
+
+metric = {
+    'name': 'loss',
+    'goal': 'minimize'}
+sweep_config['metric'] = metric   #not neccesarry unless doing baysian optimization
+
+parameters_dict = {
+    'optimizer': {
+        'values': ['adam', 'sgd']
+        },
+    'fc_layer_size': {
+        'values': [128, 256, 512]
+        },
+    'dropout': {
+          'values': [0.3, 0.4, 0.5]
+        },
+    }
+sweep_config['parameters'] = parameters_dict
+
+sweep_id = wandb.sweep(sweep_config, project = "CatsAndDogs")
 
 
 def model_pipeline(hyperparameters):
@@ -171,5 +194,6 @@ def train_log(loss,epoch):
 
 
 
-model_pipeline(config)
+#model_pipeline(config)
 
+wandb.agent(sweep_id, model_pipeline(config), count=5)
