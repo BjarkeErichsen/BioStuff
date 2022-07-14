@@ -16,39 +16,40 @@ from tqdm.notebook import tqdm
 wandb.login()
 torch.manual_seed(69)
 
-config = dict(epochs=30, batch_size=64)
 
-lr = 0.001
 
-sweep_config = {
-    'method': 'random'
-    }
 
+"""
 metric = {
     'name': 'loss',
     'goal': 'minimize'}
 sweep_config['metric'] = metric   #not neccesarry unless doing baysian optimization
-
 parameters_dict = {
     'optimizer': {
         'values': ['adam', 'sgd']
         },
-    'fc_layer_size': {
-        'values': [128, 256, 512]
-        },
     'dropout': {
           'values': [0.3, 0.4, 0.5]
-        },
+        }
+    }
+"""
+
+sweep_config = {
+    'method': 'random'
+    }
+parameters_dict = {
+    'lr': {'values': [0.001, 0.5, 0.1, 1, 0.005, 0.00001, 0.000001]},
+    'batch_size': {'values': [64, 32, 16, 128]},
+    'epochs': {'value':3}
     }
 sweep_config['parameters'] = parameters_dict
+sweep_id = wandb.sweep(sweep_config, project = "CatsAndDogs2")
 
-sweep_id = wandb.sweep(sweep_config, project = "CatsAndDogs")
 
-
-def model_pipeline(hyperparameters):
+def model_pipeline(config = None):
 
     #tell wandb to get started
-    with wandb.init(project = "CatsAndDogs", config = hyperparameters, name="30 epochs 64 batchsize"):
+    with wandb.init(project = "CatsAndDogs2", config = config, name="new run 1"):
         config = wandb.config
 
         #make the model and optimization problem
@@ -74,7 +75,7 @@ def make(config):
     criterion = nn.CrossEntropyLoss()
     model = ConvNet()
     model = model  # to send the model for training on either cuda or cpu
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=config["lr"])
 
     return model, train_loader, test_loader, criterion, optimizer
 """
@@ -138,12 +139,13 @@ class theTestDataset(Dataset):
     def __len__(self):
         return self.x.shape[0]
 
-def train(model, train_loader,test_loader, criterion, optimizer, config, device, lr=1e-4):
+def train(model, train_loader,test_loader, criterion, optimizer, config, device):
     helper = 0
 
     wandb.watch(model, criterion, log="all", log_freq=10)
 
     for epoch in range(config["epochs"]):  #use tqdm
+        complete_loss = 0
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
@@ -156,12 +158,13 @@ def train(model, train_loader,test_loader, criterion, optimizer, config, device,
 
             loss.backward()
             optimizer.step()
+            complete_loss += loss
 
-            helper +=1
-            if helper%100 == 0:
-                train_log(loss, epoch)
-        test(model,test_loader, device)
-
+        loss = float(loss)
+        wandb.log({"epoch": epoch, "loss": loss})
+        print("loss is ", loss)
+        correct, count = test(model,test_loader, device)
+        wandb.log({"percentage correct": correct / count})
     return model
 def test(model,test_loader, device):
     model.eval()
@@ -179,21 +182,20 @@ def test(model,test_loader, device):
                 correct += 1
 
             count+=1
-        wandb.log({"correct": correct, "percentage correct":correct/count})
+
 
         #maybe save the file using torch.onnx.export(model, images, "model.onnx) wandb.save(mode.onnx)
     model.train()
     return correct, count
 
-def train_log(loss,epoch):
 
-    loss = float(loss)
-    wandb.log({"epoch": epoch, "loss":loss})
 
-    print("loss is ", loss)
 
 
 
 #model_pipeline(config)
+print('cuda' if torch.cuda.is_available() else 'cpu')
+wandb.agent(sweep_id, model_pipeline, count=5) #count = number of random combinations of hyperparams
 
-wandb.agent(sweep_id, model_pipeline(config), count=5)
+
+
