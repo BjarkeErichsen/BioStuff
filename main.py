@@ -21,8 +21,8 @@ torch.manual_seed(69)
 
 """
 metric = {
-    'name': 'loss',
-    'goal': 'minimize'}
+    'name': 'correct percentage',
+    'goal': 'maximize'}
 sweep_config['metric'] = metric   #not neccesarry unless doing baysian optimization
 parameters_dict = {
     'optimizer': {
@@ -35,23 +35,39 @@ parameters_dict = {
 """
 
 sweep_config = {
-    'method': 'random'
+    'method': 'bayes'
     }
+metric = {
+    'name': 'Final correctness rate',
+    'goal': 'maximize'}
+sweep_config['metric'] = metric
 parameters_dict = {
-    'lr': {'values': [0.001, 0.5, 0.1, 1, 0.005, 0.00001, 0.000001]},
-    'batch_size': {'values': [64, 32, 16, 128]},
-    'epochs': {'value':3}
+    'lr': {"distribution": 'uniform', 'min':0, 'max': 0.1},
+    'batch_size': {"values": [16, 32, 64]},
+    'epochs': {'value':4}
     }
+
 sweep_config['parameters'] = parameters_dict
-sweep_id = wandb.sweep(sweep_config, project = "CatsAndDogs2")
+sweep_id = wandb.sweep(sweep_config, project = "CatsAndDogs3")
 
 
+"""
+early_terminate = {'early_terminate':    {'type': 'hyperband', 'min_iter': 20}}
+sweep_config['early_terminate'] = early_terminate"""
+"""
+parameters_dict = {
+    'lr': {'values': [0.0001, 0.001, 0.01]},
+    'batch_size': {'values': [16, 32, 64]},
+    'epochs': {'value':4}
+    }"""
 def model_pipeline(config = None):
 
-    #tell wandb to get started
-    with wandb.init(project = "CatsAndDogs2", config = config, name="new run 1"):
-        config = wandb.config
 
+
+    #tell wandb to get started
+    with wandb.init(project = "CatsAndDogs3", config = config):
+
+        config = wandb.config
         #make the model and optimization problem
 
         model, train_loader, test_loader, criterion, optimizer = make(config)
@@ -59,9 +75,9 @@ def model_pipeline(config = None):
         model.to(device)
 
         train(model, train_loader, test_loader, criterion, optimizer, config, device)
-
+        correct, count = test(model, test_loader, device)
+        wandb.log({"Final correctness rate": correct / count})
         #correct, count = test(model, test_loader, device)
-
     return model
 
 def make(config):
@@ -142,7 +158,7 @@ class theTestDataset(Dataset):
 def train(model, train_loader,test_loader, criterion, optimizer, config, device):
     helper = 0
 
-    wandb.watch(model, criterion, log="all", log_freq=10)
+    wandb.watch(model, criterion, log="all", log_freq=1000)
 
     for epoch in range(config["epochs"]):  #use tqdm
         complete_loss = 0
@@ -161,10 +177,9 @@ def train(model, train_loader,test_loader, criterion, optimizer, config, device)
             complete_loss += loss
 
         loss = float(loss)
-        wandb.log({"epoch": epoch, "loss": loss})
         print("loss is ", loss)
         correct, count = test(model,test_loader, device)
-        wandb.log({"percentage correct": correct / count})
+        wandb.log({"epoch": epoch, "loss": loss, "percentage correct": correct / count})
     return model
 def test(model,test_loader, device):
     model.eval()
@@ -195,7 +210,7 @@ def test(model,test_loader, device):
 
 #model_pipeline(config)
 print('cuda' if torch.cuda.is_available() else 'cpu')
-wandb.agent(sweep_id, model_pipeline, count=5) #count = number of random combinations of hyperparams
+wandb.agent(sweep_id, model_pipeline, count=15) #count = number of random combinations of hyperparams
 
 
 
